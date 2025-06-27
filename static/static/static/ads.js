@@ -1,298 +1,281 @@
+// Ad Manager - Single declaration
+let AdManager = null;
 
-// Ad management and adblock detection
-class AdManager {
-    constructor() {
-        this.adBlockDetected = false;
-        this.init();
-    }
+// Initialize only once
+if (!AdManager) {
+    AdManager = class {
+        constructor() {
+            this.adViewed = false;
+            this.init();
+        }
 
-    init() {
-        this.detectAdBlock();
-        this.setupAdClickHandlers();
-        this.preventAutoClick();
-    }
+        init() {
+            this.setupAdClicks();
+            this.preventAutoClick();
+        }
 
-    detectAdBlock() {
-        // Create a test ad element
-        const testAd = document.createElement('div');
-        testAd.innerHTML = '&nbsp;';
-        testAd.className = 'adsbox';
-        testAd.style.position = 'absolute';
-        testAd.style.left = '-9999px';
-        document.body.appendChild(testAd);
+        setupAdClicks() {
+            const ads = document.querySelectorAll('.ad-banner, .ad-sidebar');
+            ads.forEach(ad => {
+                ad.addEventListener('click', (e) => {
+                    this.handleAdClick(e);
+                });
+            });
+        }
 
-        // Check if ad blocker is active
-        setTimeout(() => {
-            if (testAd.offsetHeight === 0) {
-                this.adBlockDetected = true;
-                this.showAdBlockWarning();
+        handleAdClick(event) {
+            event.preventDefault();
+
+            if (this.adViewed) {
+                this.showMessage('You have already viewed an ad for this spin!');
+                return;
             }
-            document.body.removeChild(testAd);
-        }, 100);
 
-        // Additional detection methods
-        this.detectByRequest();
-    }
+            this.showAdModal();
+        }
 
-    detectByRequest() {
-        // Try to load a common ad script
-        const script = document.createElement('script');
-        script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js';
-        script.onerror = () => {
-            this.adBlockDetected = true;
-            this.showAdBlockWarning();
-        };
-        document.head.appendChild(script);
-    }
+        showAdModal() {
+            // Remove existing modal if any
+            const existingModal = document.querySelector('.ad-modal');
+            if (existingModal) {
+                existingModal.remove();
+            }
 
-    showAdBlockWarning() {
-        const warning = document.createElement('div');
-        warning.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.9);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-            font-family: Arial, sans-serif;
-            text-align: center;
-        `;
-        warning.innerHTML = `
-            <div>
-                <h2>🚫 AdBlock Detected!</h2>
-                <p>Please disable your ad blocker to continue playing.</p>
-                <p>Ads help us provide this free service.</p>
-                <button onclick="location.reload()" style="
-                    background: #ff6b6b;
-                    color: white;
-                    border: none;
-                    padding: 10px 20px;
-                    border-radius: 5px;
-                    cursor: pointer;
-                    margin-top: 20px;
-                ">Reload Page</button>
-            </div>
-        `;
-        document.body.appendChild(warning);
-    }
+            const modal = document.createElement('div');
+            modal.className = 'ad-modal';
+            modal.innerHTML = `
+                <div class="ad-modal-content">
+                    <div class="ad-header">
+                        <h3>🎯 Advertisement</h3>
+                        <span class="ad-timer" id="adTimer">5</span>
+                    </div>
+                    <div class="ad-body">
+                        <div class="fake-video">
+                            <h2>🎮 Play Premium Games!</h2>
+                            <p>Join thousands of players earning daily rewards!</p>
+                            <div class="ad-features">
+                                <div>💰 Higher Payouts</div>
+                                <div>🎯 More Spins</div>
+                                <div>🏆 Exclusive Rewards</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ad-footer">
+                        <button id="closeAdBtn" class="close-ad-btn" disabled>
+                            Close Ad (<span id="closeTimer">5</span>s)
+                        </button>
+                    </div>
+                </div>
+            `;
 
-    setupAdClickHandlers() {
-        // Top ad click handler
-        document.getElementById('topAd').addEventListener('click', () => {
-            this.simulateAdClick('top');
-        });
+            document.body.appendChild(modal);
+            this.startAdTimer(modal);
+        }
 
-        // Bottom ad click handler
-        document.getElementById('bottomAd').addEventListener('click', () => {
-            this.simulateAdClick('bottom');
-        });
+        startAdTimer(modal) {
+            let timeLeft = 5;
+            const timer = modal.querySelector('#adTimer');
+            const closeBtn = modal.querySelector('#closeAdBtn');
+            const closeTimer = modal.querySelector('#closeTimer');
 
-        // Left sidebar ad click handler
-        document.getElementById('leftAd').addEventListener('click', () => {
-            this.simulateAdClick('left');
-        });
+            const countdown = setInterval(() => {
+                timeLeft--;
+                timer.textContent = timeLeft;
+                closeTimer.textContent = timeLeft;
 
-        // Right sidebar ad click handler
-        document.getElementById('rightAd').addEventListener('click', () => {
-            this.simulateAdClick('right');
-        });
-    }
-
-    simulateAdClick(position) {
-        // Simulate ad click behavior
-        console.log(`Ad clicked: ${position}`);
-        
-        // Add visual feedback
-        const ad = document.getElementById(`${position}Ad`);
-        const originalTransform = ad.style.transform;
-        ad.style.transform = 'scale(0.95)';
-        
-        setTimeout(() => {
-            ad.style.transform = originalTransform;
-        }, 150);
-
-        // Track ad clicks (could send to analytics)
-        this.trackAdClick(position);
-    }
-
-    trackAdClick(position) {
-        // Send ad click data to backend
-        fetch('/track-ad-click', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                position: position,
-                timestamp: new Date().toISOString()
-            })
-        }).catch(error => {
-            console.log('Ad tracking failed:', error);
-        });
-    }
-
-    preventAutoClick() {
-        let clickCount = 0;
-        let lastClickTime = 0;
-
-        // Monitor click patterns
-        document.addEventListener('click', (event) => {
-            const currentTime = Date.now();
-            const timeDiff = currentTime - lastClickTime;
-
-            if (timeDiff < 100) { // Too fast clicking
-                clickCount++;
-                if (clickCount > 5) {
-                    this.showBotWarning();
-                    event.preventDefault();
-                    event.stopPropagation();
-                    return false;
+                if (timeLeft <= 0) {
+                    clearInterval(countdown);
+                    closeBtn.disabled = false;
+                    closeBtn.innerHTML = 'Close Ad ✓';
+                    closeBtn.onclick = () => {
+                        this.closeAdModal(modal);
+                    };
                 }
-            } else {
-                clickCount = 0;
-            }
-
-            lastClickTime = currentTime;
-        });
-
-        // Detect automation tools
-        this.detectAutomation();
-    }
-
-    detectAutomation() {
-        // Check for common automation indicators
-        if (navigator.webdriver) {
-            this.showBotWarning();
-            return;
+            }, 1000);
         }
 
-        // Check for headless browsers
-        if (window.navigator.languages === undefined) {
-            this.showBotWarning();
-            return;
+        closeAdModal(modal) {
+            modal.remove();
+            this.adViewed = true;
+            hasViewedAd = true;
+            this.showMessage('✅ Ad viewed successfully! You can now spin.');
+
+            // Enable spin button
+            const spinButton = document.getElementById('spinBtn');
+            if (spinButton) {
+                spinButton.disabled = false;
+                spinButton.style.opacity = '1';
+                spinButton.style.cursor = 'pointer';
+            }
         }
 
-        // Check for phantom.js
-        if (window.callPhantom || window._phantom) {
-            this.showBotWarning();
-            return;
+        showMessage(text) {
+            // Remove existing messages
+            const existingMessages = document.querySelectorAll('.ad-message');
+            existingMessages.forEach(msg => msg.remove());
+
+            const message = document.createElement('div');
+            message.className = 'ad-message';
+            message.textContent = text;
+            message.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #4CAF50;
+                color: white;
+                padding: 12px 20px;
+                border-radius: 8px;
+                z-index: 10000;
+                font-weight: bold;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            `;
+
+            document.body.appendChild(message);
+
+            setTimeout(() => {
+                message.remove();
+            }, 3000);
         }
 
-        // Mouse movement detection
-        let mouseEvents = 0;
-        document.addEventListener('mousemove', () => {
-            mouseEvents++;
-        });
+        preventAutoClick() {
+            let mouseEvents = 0;
+            document.addEventListener('mousemove', () => mouseEvents++);
 
-        // Check if user has natural mouse movement after 10 seconds
-        setTimeout(() => {
-            if (mouseEvents < 5) {
-                console.warn('Suspicious: Low mouse activity detected');
-            }
-        }, 10000);
-    }
+            setTimeout(() => {
+                if (mouseEvents < 5) {
+                    console.log('Suspicious: Low mouse activity detected');
+                }
+            }, 10000);
+        }
 
-    showBotWarning() {
-        const warning = document.createElement('div');
-        warning.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(255,0,0,0.9);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-            font-family: Arial, sans-serif;
-            text-align: center;
-        `;
-        warning.innerHTML = `
-            <div>
-                <h2>🤖 Bot/Automation Detected!</h2>
-                <p>Please use the site manually without automation tools.</p>
-                <p>Your account may be suspended for automated usage.</p>
-            </div>
-        `;
-        document.body.appendChild(warning);
-
-        // Disable all interactions
-        document.body.style.pointerEvents = 'none';
-    }
-
-    // Check if ads are properly loaded
-    checkAdLoad() {
-        const ads = [
-            document.getElementById('topAd'),
-            document.getElementById('bottomAd'),
-            document.getElementById('leftAd'),
-            document.getElementById('rightAd')
-        ];
-
-        ads.forEach((ad, index) => {
-            if (!ad || ad.offsetHeight === 0) {
-                console.warn(`Ad ${index} failed to load properly`);
-            }
-        });
-    }
+        resetAdStatus() {
+            this.adViewed = false;
+            hasViewedAd = false;
+        }
+    };
 }
 
-// Initialize ad manager
-document.addEventListener('DOMContentLoaded', () => {
-    const adManager = new AdManager();
-    
-    // Check ad load after page is fully loaded
-    window.addEventListener('load', () => {
-        setTimeout(() => {
-            adManager.checkAdLoad();
-        }, 1000);
-    });
+// Initialize Ad Manager when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    if (!window.adManager) {
+        window.adManager = new AdManager();
+    }
 });
 
-// DNS/Proxy detection
-function detectProxy() {
-    // Check for common proxy headers in a real implementation
-    // This would require server-side detection
-    const suspiciousUAs = [
-        'bot', 'crawler', 'spider', 'scraper', 'automation'
-    ];
-    
-    const userAgent = navigator.userAgent.toLowerCase();
-    
-    for (const suspicious of suspiciousUAs) {
-        if (userAgent.includes(suspicious)) {
-            console.warn('Suspicious user agent detected');
-            return true;
+// CSS for ad modal - only add if not exists
+if (!document.querySelector('#adModalStyles')) {
+    const adStyles = `
+    .ad-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+    }
+
+    .ad-modal-content {
+        background: white;
+        padding: 0;
+        border-radius: 12px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 80vh;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+
+    .ad-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 15px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .ad-timer {
+        background: rgba(255,255,255,0.2);
+        padding: 5px 10px;
+        border-radius: 15px;
+        font-weight: bold;
+    }
+
+    .ad-body {
+        padding: 20px;
+        text-align: center;
+    }
+
+    .fake-video {
+        background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%);
+        padding: 30px 20px;
+        border-radius: 10px;
+        color: #333;
+    }
+
+    .ad-features {
+        display: flex;
+        justify-content: space-around;
+        margin-top: 20px;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .ad-features > div {
+        background: rgba(255,255,255,0.8);
+        padding: 8px 12px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: bold;
+    }
+
+    .ad-footer {
+        padding: 15px 20px;
+        border-top: 1px solid #eee;
+        text-align: center;
+    }
+
+    .close-ad-btn {
+        background: #4CAF50;
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 25px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .close-ad-btn:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+    }
+
+    .close-ad-btn:not(:disabled):hover {
+        background: #45a049;
+        transform: translateY(-2px);
+    }
+
+    @media (max-width: 600px) {
+        .ad-modal-content {
+            width: 95%;
+            margin: 10px;
+        }
+
+        .ad-features {
+            flex-direction: column;
+            align-items: center;
         }
     }
-    
-    return false;
-}
+    `;
 
-// Initialize proxy detection
-if (detectProxy()) {
-    console.warn('Proxy/Bot detected');
+    const styleSheet = document.createElement('style');
+    styleSheet.id = 'adModalStyles';
+    styleSheet.textContent = adStyles;
+    document.head.appendChild(styleSheet);
 }
-
-// Real-time ad monitoring
-setInterval(() => {
-    const adElements = document.querySelectorAll('.ad-banner, .ad-sidebar');
-    let visibleAds = 0;
-    
-    adElements.forEach(ad => {
-        if (ad.offsetHeight > 0 && ad.offsetWidth > 0) {
-            visibleAds++;
-        }
-    });
-    
-    if (visibleAds < 4) {
-        console.warn('Some ads are not visible - possible ad blocking');
-    }
-}, 5000);
